@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: {{.DRONE_WALL_NAME}}
+  name: {{.DRONE_WALL_NAME}}-service
+spec:
+  ports:
+  - name: https
+    port: 443
+    targetPort: 10443
+  selector:
+    name: {{.DRONE_WALL_NAME}}

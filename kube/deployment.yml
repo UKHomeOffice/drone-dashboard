@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.DRONE_WALL_NAME}}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      name: {{.DRONE_WALL_NAME}}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        name: {{.DRONE_WALL_NAME}}
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+      containers:
+      - name: {{.DRONE_WALL_NAME}}-proxy
+        image: "{{.NGINX_IMAGE}}:{{.NGINX_TAG}}"
+        imagePullPolicy: Always
+        securityContext:
+          runAsNonRoot: true
+          capabilities:
+            drop:
+             - SETUID
+             - SETGID
+        resources:
+         limits:
+          memory: "100Mi"
+          cpu: "100m"
+         requests:
+          memory: "50Mi"
+          cpu: "100m"
+        env:
+          - name: PROXY_SERVICE_HOST
+            value: 'http://127.0.0.1'
+          - name: PROXY_SERVICE_PORT
+            value: '8080'
+          - name: SERVER_CERT
+            value: "/certs/tls.crt"
+          - name: SERVER_KEY
+            value: "/certs/tls.key"
+          - name: LOG_FORMAT_NAME
+            value: 'json'
+          - name: NAXSI_USE_DEFAULT_RULES
+            value: 'FALSE'
+          - name: ENABLE_UUID_PARAM
+            value: 'FALSE'
+          - name: STATSD_METRICS
+            value: "FALSE"
+        ports:
+          - name: https
+            containerPort: 10443
+        volumeMounts:
+          - name: certs
+            mountPath: /certs
+      - name: {{.DRONE_WALL_NAME}}
+        image: quay.io/ukhomeofficedigital/drone-dashboard:{{.DRONE_DASHBOARD_TAG}}
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          timeoutSeconds: 3
+      restartPolicy: Always
+      volumes:
+      - name: certs
+        secret:
+          secretName: "{{.DRONE_WALL_NAME}}-pod-tls"

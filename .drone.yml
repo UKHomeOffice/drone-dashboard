@@ -1,0 +1,114 @@
+pipeline:
+
+  synch_secrets:
+    image: quay.io/ukhomeofficedigital/cop-secrets
+    environment:
+      - DRONE_SERVER=https://drone.acp.homeoffice.gov.uk
+      - DEPLOY_ENV=dev
+    secrets:
+      - source: DEV_DRONE_AWS_ACCESS_KEY_ID
+        target: AWS_ACCESS_KEY_ID
+      - source: DEV_DRONE_AWS_SECRET_ACCESS_KEY
+        target: AWS_SECRET_ACCESS_KEY
+      - source: DRONE_PUBLIC_TOKEN
+        target: DRONE_TOKEN
+    when:
+      environment: secrets
+      event: deployment
+
+  build:
+    image: quay.io/ukhomeofficedigital/drone-docker
+    commands:
+      - docker build -t drone-dashboard:$${DRONE_COMMIT_SHA} .
+    when:
+      event: push
+
+  vulnerability-scan:
+    image: quay.io/ukhomeofficedigital/anchore-submission:latest
+    dockerfile: Dockerfile
+    image_name: drone-dashboard:${DRONE_COMMIT_SHA}
+    local_image: true
+    tolerate: low
+    fail_on_detection: false
+    when:
+      branch: master
+      event: push
+
+  image_to_quay:
+    image: quay.io/ukhomeofficedigital/drone-docker
+    secrets:
+      - source: QUAY_PASSWORD
+        target: DOCKER_PASSWORD
+      - source: QUAY_USERNAME
+        target: DOCKER_USERNAME
+    registry: quay.io
+    repo: quay.io/ukhomeofficedigital/drone-dashboard
+    tags:
+      - ${DRONE_COMMIT_SHA}
+    when:
+      branch: master
+      event: push
+
+  github_monitor:
+    image: quay.io/ukhomeofficedigital/kd
+    secrets:
+      - source: DEV_KUBE_NAMESPACE_COP_OPS
+        target: KUBE_NAMESPACE
+      - source: DEV_KUBE_SERVER
+        target: KUBE_SERVER
+      - source: DEV_KUBE_TOKEN
+        target: KUBE_TOKEN
+      - source: NGINX_IMAGE
+        target: NGINX_IMAGE
+      - source: NGINX_TAG
+        target: NGINX_TAG
+      - source: WHITELIST
+        target: WHITELIST
+    commands:
+      - export DRONE_WALL_NAME="github-drone"
+      - export DRONE_DASHBOARD_TAG=$${DRONE_COMMIT_SHA}
+      - kd --insecure-skip-tls-verify -f kube/cert.yml -f kube/deployment.yml -f kube/service.yml -f kube/ingress.yml -f kube/network-policy.yml
+    when:
+      branch: master
+      event: push
+
+  gitlab_monitor:
+    image: quay.io/ukhomeofficedigital/kd
+    secrets:
+      - source: DEV_KUBE_NAMESPACE_COP_OPS
+        target: KUBE_NAMESPACE
+      - source: DEV_KUBE_SERVER
+        target: KUBE_SERVER
+      - source: DEV_KUBE_TOKEN
+        target: KUBE_TOKEN
+      - source: NGINX_IMAGE
+        target: NGINX_IMAGE
+      - source: NGINX_TAG
+        target: NGINX_TAG
+      - source: WHITELIST
+        target: WHITELIST
+    commands:
+      - export DRONE_WALL_NAME="gitlab-drone"
+      - export DRONE_DASHBOARD_TAG=$${DRONE_COMMIT_SHA}
+      - kd --insecure-skip-tls-verify -f kube/cert.yml -f kube/deployment.yml -f kube/service.yml -f kube/ingress.yml -f kube/network-policy.yml
+    when:
+      branch: master
+      event: push
+
+  notify:
+    image: plugins/slack
+    secrets: [ SLACK_WEBHOOK ]
+    channel: cop-deployments
+    username: Drone Build Watcher
+    template: >
+      {{#build.deployTo}}
+        *{{repo.name}} - Build {{build.number}} - {{uppercasefirst build.deployTo}} - {{uppercase build.status}}*
+        {{build.link}}
+      {{else}}
+        *{{repo.name}} - Build {{build.number}} - Development - {{uppercase build.status}}*
+        {{build.link}}
+      {{/build.deployTo}}
+    when:
+      branch: master
+      event: [ push, deployment ]
+      status: [ success, failure ]

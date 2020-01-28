@@ -1,0 +1,26 @@
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: {{.DRONE_WALL_NAME}}-ingress
+  labels:
+    stable.k8s.psg.io/kcm.class: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx-external"
+    ingress.kubernetes.io/force-ssl-redirect: "true"
+    ingress.kubernetes.io/backend-protocol: "HTTPS"
+    stable.k8s.psg.io/kcm.provider: http
+    ingress.kubernetes.io/whitelist-source-range: {{.WHITELIST}}
+spec:
+  rules:
+  - host: {{.DRONE_WALL_NAME}}.dev.cop.homeoffice.gov.uk
+    http:
+      paths:
+      - backend:
+          serviceName: {{.DRONE_WALL_NAME}}-service
+          servicePort: 10443
+        path: /
+  tls:
+  - hosts:
+      - {{.DRONE_WALL_NAME}}.dev.cop.homeoffice.gov.uk
+    secretName: {{.DRONE_WALL_NAME}}-ingress-tls
