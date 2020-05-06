@@ -84,4 +84,4 @@ spec:
       volumes:
       - name: certs
         secret:
-          secretName: "{{.DRONE_WALL_NAME}}-pod-tls"
+          secretName: "{{.DRONE_WALL_NAME}}-pod-cmio"
