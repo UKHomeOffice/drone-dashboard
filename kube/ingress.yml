@@ -23,4 +23,4 @@ spec:
   tls:
   - hosts:
       - {{.DRONE_WALL_NAME}}.dev.cop.homeoffice.gov.uk
-    secretName: {{.DRONE_WALL_NAME}}-ingress-tls
+    secretName: {{.DRONE_WALL_NAME}}-ingress-cmio
